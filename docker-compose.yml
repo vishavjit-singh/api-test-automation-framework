@@ -1,0 +1,30 @@
+# docker compose up --build --exit-code-from tests
+#   api    the demo Orders API (system under test)
+#   tests  the regression suite, --env docker (http://api:8000); JUnit + Xray JSON land in ./reports
+name: api-test-automation
+
+services:
+  api:
+    build: .
+    image: api-test-automation:latest
+    environment:
+      APP_ENV: docker
+      API_JWT_SECRET: ${API_JWT_SECRET:-dev-only-secret-change-me-0123456789}
+    ports: ["8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  tests:
+    image: api-test-automation:latest
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      API_JWT_SECRET: ${API_JWT_SECRET:-dev-only-secret-change-me-0123456789}
+    volumes:
+      - ./reports:/app/reports
+    command: ["python", "-m", "pytest", "tests/api", "--env", "docker", "-p", "no:cacheprovider",
+              "--junitxml", "reports/junit.xml"]

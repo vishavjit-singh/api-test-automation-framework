@@ -1,0 +1,38 @@
+# Manual run against a deployed environment. Configure repository secrets first:
+#   STAGING_API_URL, API_JWT_SECRET, and optionally XRAY_CLIENT_ID / XRAY_CLIENT_SECRET.
+# Fault-injection tests are skipped automatically (staging has test_hooks: false).
+name: API regression (staging)
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_xray:
+        description: "Import the results into Xray"
+        type: boolean
+        default: false
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    env:
+      STAGING_API_URL: ${{ secrets.STAGING_API_URL }}
+      API_JWT_SECRET: ${{ secrets.API_JWT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pytest tests/api --env staging --junitxml reports/junit.xml
+      - name: Import into Xray
+        if: always() && inputs.upload_to_xray
+        env:
+          XRAY_CLIENT_ID: ${{ secrets.XRAY_CLIENT_ID }}
+          XRAY_CLIENT_SECRET: ${{ secrets.XRAY_CLIENT_SECRET }}
+        run: python -m apitest xray-upload --send
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: staging-reports
+          path: reports/

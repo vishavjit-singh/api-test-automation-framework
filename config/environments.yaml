@@ -1,0 +1,40 @@
+# Where the regression suite runs. Pick one with `pytest --env <name>` or API_ENV=<name>.
+# Secrets never live here: the JWT signing secret is read from the variable named in auth.secret_env.
+environments:
+  inproc:            # the demo service inside the test process (no network); default for CI and make test
+    mode: inproc
+    base_url: http://testserver
+    test_hooks: true
+  local:             # uvicorn on this machine (make serve / make demo)
+    mode: http
+    base_url: http://127.0.0.1:8000
+    test_hooks: true
+  docker:            # the api container in docker-compose.yml
+    mode: http
+    base_url: http://api:8000
+    test_hooks: true
+  staging:           # a deployed environment: URL and secret come from CI variables, fault hooks are off
+    mode: http
+    base_url: ${STAGING_API_URL}
+    test_hooks: false
+    timeout_s: 15
+    retries: 2
+
+defaults:
+  timeout_s: 5
+  retries: 1         # GET/HEAD only, on 502/503/504 and connection errors
+
+auth:
+  issuer: https://auth.example.test
+  audience: orders-api
+  secret_env: API_JWT_SECRET
+  dev_secret: dev-only-secret-change-me-0123456789   # used only when the variable is unset and test_hooks is true
+
+tenants: [acme, globex]
+
+# Route templates for the latency report: concrete paths are folded into these.
+routes:
+  - ['^/v1/orders/ord_[0-9a-f]+/cancel$', '/v1/orders/{id}/cancel']
+  - ['^/v1/orders/ord_[0-9a-f]+$', '/v1/orders/{id}']
+  - ['^/v1/orders/[^/]+$', '/v1/orders/{id}']
+  - ['^/v1/products/[^/]+$', '/v1/products/{sku}']
